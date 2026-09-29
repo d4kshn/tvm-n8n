@@ -1,0 +1,535 @@
+{
+  "name": "TVM overdue tickets -> SharePoint Excel (full sync)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "id": "4adbf845-3ee2-4402-a005-5207a8ae1b05",
+      "name": "Every 15 min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "92e1a356-438a-4a37-9cc5-f2b6d8396c23",
+              "name": "graphBase",
+              "value": "https://graph.microsoft.com/v1.0",
+              "type": "string"
+            },
+            {
+              "id": "2800621b-361b-44c7-9ac7-b6aa199c3681",
+              "name": "srcSiteId",
+              "value": "REPLACE__source_site_id",
+              "type": "string"
+            },
+            {
+              "id": "f6d22062-c2cb-442b-92de-2a1a4dc51d25",
+              "name": "srcFolderPath",
+              "value": "Daily TVM Ticketing Metrics",
+              "type": "string"
+            },
+            {
+              "id": "68b28a3a-13fe-4adc-925d-15474dcf54db",
+              "name": "dstSiteId",
+              "value": "REPLACE__dest_site_id",
+              "type": "string"
+            },
+            {
+              "id": "8d7795f9-5aaa-48e4-ae9c-0618e46119b9",
+              "name": "dstItemId",
+              "value": "REPLACE__dest_workbook_item_id",
+              "type": "string"
+            },
+            {
+              "id": "226d037b-2b09-4e24-bc56-a3dce2cf39d2",
+              "name": "dstSheet",
+              "value": "REPLACE__worksheet_name",
+              "type": "string"
+            },
+            {
+              "id": "990781ec-2a51-4cf4-bbfc-4726af5c2a25",
+              "name": "dstTable",
+              "value": "REPLACE__table_name",
+              "type": "string"
+            },
+            {
+              "id": "2e734973-1434-42f0-8759-2f4dc0209440",
+              "name": "ownerList",
+              "value": "={{ [\"Julio Calderon\",\"Pedro Faria\",\"Zubair Malik\",\"Deepak Padliya\",\"Sel Soyer\"] }}",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ecc0aaba-348c-4ca6-ada2-b28d38b0a1a1",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        450,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.graphBase }}/sites/{{ $json.srcSiteId }}/drive/root:/{{ encodeURIComponent($json.srcFolderPath) }}:/children?$select=name,id&$top=999",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "options": {}
+      },
+      "id": "ec5c6a1b-d528-4a59-a4b2-d63ed276ba42",
+      "name": "List folder",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Reads the folder listing (Graph /children) and returns the single newest file.\n// If we've already processed that file, returns nothing so the run stops here.\nconst resp = $input.first().json;\nconst files = Array.isArray(resp.value) ? resp.value : [];\n\nconst re = /SLA_Flow_Stock_(\\d{4}-\\d{2}-\\d{2})\\.html$/i;\n\nconst dated = files\n  .map((f) => {\n    const m = String(f.name ?? '').match(re);\n    return m ? { file: f, date: m[1] } : null;\n  })\n  .filter(Boolean)\n  .sort((a, b) => (a.date < b.date ? 1 : -1)); // newest first\n\nif (dated.length === 0) return [];\n\nconst newest = dated[0];\nconst store = $getWorkflowStaticData('global');\nif (store.lastProcessedFile === newest.file.name) return []; // nothing new -> stop\nstore.lastProcessedFile = newest.file.name;\nreturn [{ json: { id: newest.file.id, name: newest.file.name } }];"
+      },
+      "id": "9bf9d81d-a690-475d-8fe1-4c26751f19b4",
+      "name": "Pick newest file",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        870,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Config').first().json.graphBase }}/sites/{{ $('Config').first().json.dstSiteId }}/drive/items/{{ $('Config').first().json.dstItemId }}/workbook/tables('{{ $('Config').first().json.dstTable }}')/dataBodyRange?$select=address,rowCount",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "options": {}
+      },
+      "id": "9378f345-5d27-4a77-933d-26f84b151f90",
+      "name": "Get table range",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1080,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.graphBase }}/sites/{{ $('Config').first().json.dstSiteId }}/drive/items/{{ $('Config').first().json.dstItemId }}/workbook/worksheets('{{ $('Config').first().json.dstSheet }}')/range(address='{{ ($json.address || '').split('!').pop() }}')/delete",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"shift\":\"Up\"}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "options": {}
+      },
+      "id": "4f1a2495-1e19-46b4-97ce-35ca7a684126",
+      "name": "Clear table rows",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1290,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Config').first().json.graphBase }}/sites/{{ $('Config').first().json.srcSiteId }}/drive/items/{{ $('Pick newest file').first().json.id }}/content",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "id": "178afbb2-acb7-40fc-8e14-0d20e3bfb146",
+      "name": "Download file",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1500,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "extractHtmlContent",
+        "sourceData": "json",
+        "dataPropertyName": "data",
+        "extractionValues": {
+          "values": [
+            {
+              "key": "rowHtml",
+              "cssSelector": "table tr",
+              "returnValue": "html",
+              "returnArray": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "abd7832e-5a35-461d-8b37-ace7cdf6a141",
+      "name": "Extract rows",
+      "type": "n8n-nodes-base.html",
+      "typeVersion": 1.2,
+      "position": [
+        1710,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "rowHtml",
+        "options": {}
+      },
+      "id": "3131e778-363e-4d26-a7de-decc151c1184",
+      "name": "Split rows",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        1920,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "06d71df1-ab9a-4e62-a4d2-aa82d00c28d6",
+              "name": "rowWrapped",
+              "value": "={{ '<table>' + $json.rowHtml + '</table>' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ba4a29d1-7c23-4441-8c09-28a461003471",
+      "name": "Wrap row",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2130,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "extractHtmlContent",
+        "sourceData": "json",
+        "dataPropertyName": "rowWrapped",
+        "extractionValues": {
+          "values": [
+            {
+              "key": "ticket",
+              "cssSelector": "td:nth-child(1) a.tkt",
+              "returnValue": "text",
+              "returnArray": false
+            },
+            {
+              "key": "url",
+              "cssSelector": "td:nth-child(1) a.tkt",
+              "returnValue": "attribute",
+              "attribute": "href",
+              "returnArray": false
+            },
+            {
+              "key": "severity",
+              "cssSelector": "td:nth-child(2)",
+              "returnValue": "text",
+              "returnArray": false
+            },
+            {
+              "key": "state",
+              "cssSelector": "td:nth-child(3)",
+              "returnValue": "text",
+              "returnArray": false
+            },
+            {
+              "key": "sla",
+              "cssSelector": "td:nth-child(4)",
+              "returnValue": "text",
+              "returnArray": false
+            },
+            {
+              "key": "owner",
+              "cssSelector": "td:nth-child(6)",
+              "returnValue": "text",
+              "returnArray": false
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "4a991455-07b2-4ec6-81ee-7aeac9d1bbd0",
+      "name": "Extract fields",
+      "type": "n8n-nodes-base.html",
+      "typeVersion": 1.2,
+      "position": [
+        2340,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "b1480f47-aee0-4174-b182-c81d11fc3fb0",
+              "leftValue": "={{ ($json.sla || '').trim() === 'Overdue' && $('Config').first().json.ownerList.includes(($json.owner || '').trim()) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "002d504d-64a0-4401-8d48-afd1cb13c8d5",
+      "name": "Keep overdue for owners",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        2550,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build the 5 table columns. Ticket cell is a HYPERLINK formula so it stays clickable.\n// Output keys must match the table headers exactly.\nreturn $input.all().map((item) => {\n  const j = item.json;\n  const url = String(j.url ?? '').replace(/\"/g, '\"\"'); // escape quotes for the formula\n  const ticket = String(j.ticket ?? '').trim();\n  return {\n    json: {\n      'Overdue Tickets': `=HYPERLINK(\"${url}\",\"${ticket}\")`,\n      'Severity': String(j.severity ?? '').trim(),\n      'Assignment': String(j.owner ?? '').trim(),\n      'State': String(j.state ?? '').trim(),\n      'Summary': '',\n    },\n  };\n});"
+      },
+      "id": "b326222c-b73e-4274-8774-ab0cf67752e8",
+      "name": "Build rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2760,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.graphBase }}/sites/{{ $('Config').first().json.dstSiteId }}/drive/items/{{ $('Config').first().json.dstItemId }}/workbook/tables('{{ $('Config').first().json.dstTable }}')/rows",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"values\": [[ $json['Overdue Tickets'], $json['Severity'], $json['Assignment'], $json['State'], $json['Summary'] ]] } }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "options": {}
+      },
+      "id": "b1e37574-f436-4693-8b02-8bc889bdbe7d",
+      "name": "Append to table",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2970,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Setup after import\n\n**1) One credential for the 5 HTTP nodes**\nCreate an **OAuth2 API** credential:\n- Grant Type: **Client Credentials**\n- Access Token URL: `https://login.microsoftonline.com/<TENANT_ID>/oauth2/v2.0/token`\n- Client ID / Secret: from your Entra app registration\n- Scope: `https://graph.microsoft.com/.default`\n\nAttach it to: List folder, Get table range, Clear table rows, Download file, Append to table.\nThe app needs Graph **application** permission **Sites.Selected**, authorized on both the ServiceFabric and IPEngineering sites.\n\n**2) Fill the Config node**\n- `srcSiteId` / `dstSiteId` \u2014 Graph Explorer: `GET /sites/digitalrealty.sharepoint.com:/sites/ServiceFabric?$select=id` (and `.../IPEngineering`)\n- `srcFolderPath` \u2014 source folder name (default document library assumed)\n- `dstItemId` \u2014 workbook driveItem id: `GET /sites/{dstSiteId}/drive/root/search(q='Network Engineering Overdue Tickets')?$select=id,name`\n- `dstSheet` / `dstTable` \u2014 worksheet name + table name (the Table Design tab shows the table name)\n- `ownerList` \u2014 already set to your 5 owners\n\n**Notes**\n- Filter = SLA `Overdue` AND owner in list \u2014 all severities, no group gate.\n- Tickets are written as `=HYPERLINK(...)` so they stay clickable. If they land as literal text, write the range `formulas` instead.\n- \"Clear table rows\" empties the table body each run so closed tickets drop out (full sync). It continues on error for the already-empty case.\n- \"Extract fields\" selectors assume the current column order of the dashboard; update the nth-child numbers if that layout changes.\n",
+        "height": 560,
+        "width": 470,
+        "color": 4
+      },
+      "id": "b423f590-950b-4261-b4cc-ca4e035279d0",
+      "name": "Setup",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        240,
+        560
+      ]
+    }
+  ],
+  "connections": {
+    "Every 15 min": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "List folder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List folder": {
+      "main": [
+        [
+          {
+            "node": "Pick newest file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pick newest file": {
+      "main": [
+        [
+          {
+            "node": "Get table range",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get table range": {
+      "main": [
+        [
+          {
+            "node": "Clear table rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clear table rows": {
+      "main": [
+        [
+          {
+            "node": "Download file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download file": {
+      "main": [
+        [
+          {
+            "node": "Extract rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract rows": {
+      "main": [
+        [
+          {
+            "node": "Split rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split rows": {
+      "main": [
+        [
+          {
+            "node": "Wrap row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wrap row": {
+      "main": [
+        [
+          {
+            "node": "Extract fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract fields": {
+      "main": [
+        [
+          {
+            "node": "Keep overdue for owners",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Keep overdue for owners": {
+      "main": [
+        [
+          {
+            "node": "Build rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build rows": {
+      "main": [
+        [
+          {
+            "node": "Append to table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {}
+}
