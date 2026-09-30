@@ -15,10 +15,9 @@
             }
           ]
         },
-        "responseMode": "responseNode",
         "options": {}
       },
-      "id": "8ecf6b89-6570-4a42-b0ce-8ee04d020375",
+      "id": "b8d664f1-3001-4d18-a426-d57eee5fc79b",
       "name": "On form submission",
       "type": "n8n-nodes-base.formTrigger",
       "typeVersion": 2.2,
@@ -26,14 +25,14 @@
         240,
         300
       ],
-      "webhookId": "f973f69d-86d8-445d-9f30-596bea86be04"
+      "webhookId": "4dbb5c1c-5d4f-449a-80a1-200106b4d828"
     },
     {
       "parameters": {
         "assignments": {
           "assignments": [
             {
-              "id": "e6b49a7b-e2cc-435d-843d-2f3a6f718b81",
+              "id": "bbf8fed2-7c8e-4371-aed3-fdecc31f0002",
               "name": "ownerList",
               "value": "={{ [\"Julio Calderon\",\"Pedro Faria\",\"Zubair Malik\",\"Deepak Padliya\",\"Sel Soyer\"] }}",
               "type": "array"
@@ -42,7 +41,7 @@
         },
         "options": {}
       },
-      "id": "746a5892-6b9b-4b65-801d-e116cbd2bd68",
+      "id": "d9d2fec4-c9c0-45f6-84d3-43657e5ee50b",
       "name": "Config",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
@@ -55,7 +54,7 @@
       "parameters": {
         "jsCode": "// Expose whichever binary property the form produced as `data`,\n// so the HTML parser has a predictable field to read.\nconst item = $('On form submission').first();\nconst bin = item.binary || {};\nconst key = Object.keys(bin)[0];\nif (!key) {\n  throw new Error('No uploaded file found on the form submission.');\n}\nreturn [{ json: {}, binary: { data: bin[key] } }];"
       },
-      "id": "2f99dd0b-363c-430c-8ce6-06f182596478",
+      "id": "ea818401-8ca8-42f9-ad21-d027797a44cf",
       "name": "Normalize upload",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -81,7 +80,7 @@
         },
         "options": {}
       },
-      "id": "b193aaa0-a9f8-4da5-b90a-e17ed3fe34e7",
+      "id": "a67ea90c-19ac-4bf1-9ac2-e7ded62ea88d",
       "name": "Extract rows",
       "type": "n8n-nodes-base.html",
       "typeVersion": 1.2,
@@ -95,7 +94,7 @@
         "fieldToSplitOut": "rowHtml",
         "options": {}
       },
-      "id": "9edf62a7-05e9-47e2-8741-0b488362d83e",
+      "id": "8e25bb45-1968-410b-b369-4e70123d7510",
       "name": "Split rows",
       "type": "n8n-nodes-base.splitOut",
       "typeVersion": 1,
@@ -109,7 +108,7 @@
         "assignments": {
           "assignments": [
             {
-              "id": "ddc343f2-c372-4e7c-9c59-23b04a43df94",
+              "id": "ade289b3-4fef-4446-bfa4-f23467a67314",
               "name": "rowWrapped",
               "value": "={{ '<table>' + $json.rowHtml + '</table>' }}",
               "type": "string"
@@ -118,7 +117,7 @@
         },
         "options": {}
       },
-      "id": "945b9323-47e5-43fa-b447-73e82c1b0081",
+      "id": "9f61062f-d405-4b66-bbc8-c3c3f73f70a6",
       "name": "Wrap row",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
@@ -175,7 +174,7 @@
         },
         "options": {}
       },
-      "id": "af95bcf9-8095-48fd-8b3e-726c1b012f36",
+      "id": "170317fa-fd90-4dd1-9f5a-f7686ff8e372",
       "name": "Extract fields",
       "type": "n8n-nodes-base.html",
       "typeVersion": 1.2,
@@ -194,7 +193,7 @@
           },
           "conditions": [
             {
-              "id": "c274a24f-ff1e-4b84-84e5-d4edeaed1195",
+              "id": "3c7fe401-4277-4e9a-b3c7-206b9bc7f607",
               "leftValue": "={{ ($json.sla || '').trim() === 'Overdue' && $('Config').first().json.ownerList.includes(($json.owner || '').trim()) }}",
               "rightValue": "",
               "operator": {
@@ -208,7 +207,7 @@
         },
         "options": {}
       },
-      "id": "e28ceaad-c9a8-4bf5-bfbe-b17ab95987da",
+      "id": "de9d8347-9ee7-4b21-a4e5-d369a219b7a5",
       "name": "Keep overdue for owners",
       "type": "n8n-nodes-base.filter",
       "typeVersion": 2.2,
@@ -221,7 +220,7 @@
       "parameters": {
         "jsCode": "// Plain-text columns (Ticket + URL). A clickable =HYPERLINK needs the online/Graph version.\nreturn $input.all().map((item) => {\n  const j = item.json;\n  return {\n    json: {\n      'Overdue Tickets': String(j.ticket ?? '').trim(),\n      'Ticket URL': String(j.url ?? '').trim(),\n      'Severity': String(j.severity ?? '').trim(),\n      'Assignment': String(j.owner ?? '').trim(),\n      'State': String(j.state ?? '').trim(),\n      'Summary': '',\n    },\n  };\n});"
       },
-      "id": "194bc8f2-f752-4bc9-939a-5749d0601c04",
+      "id": "74f71c99-28a3-4aae-9375-2fc35afe3573",
       "name": "Build rows",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -238,7 +237,7 @@
           "sheetName": "TVM Tickets"
         }
       },
-      "id": "7c6c5bda-048c-4b50-90b4-0d50300dbc9a",
+      "id": "39e6a80c-a964-4fe6-a79e-6b04d2215b40",
       "name": "To XLSX",
       "type": "n8n-nodes-base.convertToFile",
       "typeVersion": 1.1,
@@ -249,27 +248,31 @@
     },
     {
       "parameters": {
-        "respondWith": "binary",
-        "responseBinaryPropertyName": "data",
+        "operation": "completion",
+        "respondWith": "returnBinary",
+        "completionTitle": "Your TVM Excel is ready",
+        "completionMessage": "The filtered overdue-tickets file is downloading.",
+        "inputDataFieldName": "data",
         "options": {}
       },
-      "id": "7b493c7d-1e3e-4f9e-8103-e4b05818fb35",
-      "name": "Respond with file",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
+      "id": "783ec96e-6e30-4d21-9ead-018801d9fa5d",
+      "name": "Download Excel",
+      "type": "n8n-nodes-base.form",
+      "typeVersion": 1,
       "position": [
         2340,
         300
-      ]
+      ],
+      "webhookId": "ac6905c4-8786-4edc-8285-0608002352ff"
     },
     {
       "parameters": {
-        "content": "## Form-upload version (n8n on server, files on your PC)\n\nn8n runs on the server, so it can't read your laptop's files. This version takes the HTML\n**through your browser** and hands the Excel back as a download \u2014 no server file access and\nno `N8N_RESTRICT_FILE_ACCESS_TO` needed.\n\n**How to use**\n1. Open the \"On form submission\" node and copy its form URL.\n   - Test URL: works while the canvas is open and you click **Execute workflow**.\n   - Production URL: works once the workflow is **Active**.\n2. In your browser, open that URL, pick your dashboard `.html`, and submit.\n3. The filtered Excel (Overdue tickets for your owners) downloads automatically.\n\n**Config**\n- `ownerList` \u2014 your 5 owners (prefilled). Edit in the Config node.\n\n**Notes**\n- Columns: Overdue Tickets, Ticket URL, Severity, Assignment, State, Summary (plain text;\n  a clickable `=HYPERLINK` needs the online/Graph version).\n- \"Normalize upload\" auto-detects the uploaded file's binary property, so the parser just\n  works regardless of the form field name.\n- Prefer it to run on the server against a file instead? Put the HTML on a network share the\n  server can reach (e.g. an SMB mount), add that path to `N8N_RESTRICT_FILE_ACCESS_TO`, and\n  use the earlier file-based workflow. That needs whoever administers the n8n server.\n",
-        "height": 600,
+        "content": "## Form-upload version (n8n on server, files on your PC)\n\nn8n runs on the server, so it can't read your laptop's files. This version takes the HTML\n**through your browser** and hands the Excel back as a download \u2014 no server file access.\n\n**Why the last node is an n8n Form node:** this n8n build blocks the \"Respond to Webhook\"\nnode in Form-Trigger workflows, so the response is produced by the **\"Download Excel\"** node\n(n8n Form node, Page Type = *Form Ending*, Respond With = *Return Binary File*). Leave the\nForm Trigger's \"Respond When\" at its default \u2014 do **not** set it to \"Using Respond to Webhook.\"\n\n**How to use**\n1. Open \"On form submission\" and copy its form URL (Test URL while editing; Production URL\n   once the workflow is Active).\n2. In your browser, open it, pick the dashboard `.html`, and submit.\n3. The completion page returns the filtered Excel as a download.\n\n**Config**\n- `ownerList` \u2014 your 5 owners (prefilled). Edit in the Config node.\n\n**Notes**\n- Columns: Overdue Tickets, Ticket URL, Severity, Assignment, State, Summary (plain text;\n  a clickable `=HYPERLINK` needs the production SharePoint/Graph version).\n- \"Normalize upload\" auto-detects the uploaded file's binary property, so parsing just works.\n- If the file that downloads is the HTML you uploaded rather than the Excel, that's an older\n  Form-Ending quirk with binary selection \u2014 update n8n, or ask me for the variant that forces\n  the correct binary.\n",
+        "height": 640,
         "width": 500,
         "color": 4
       },
-      "id": "dcc7fe2e-f96b-472e-a1a3-469cd7e78282",
+      "id": "30621344-e455-476f-b9b3-6b586f64db70",
       "name": "Setup",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -383,7 +386,7 @@
       "main": [
         [
           {
-            "node": "Respond with file",
+            "node": "Download Excel",
             "type": "main",
             "index": 0
           }
