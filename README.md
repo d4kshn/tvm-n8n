@@ -43,3 +43,6 @@ credential and no per-node resource pickers.
   error for the already-empty case.
 - The per-row selectors in "Extract fields" assume the dashboard's current column order.
 - Run manually once (schedule off) to validate before enabling the timer.
+
+## Related
+- [`local-no-sharepoint/`](local-no-sharepoint/) — offline version that reads/writes local files (no SharePoint or Microsoft credentials), handy for testing the parse/filter logic before access is provisioned.
