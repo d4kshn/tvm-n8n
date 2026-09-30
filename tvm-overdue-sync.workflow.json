@@ -280,8 +280,38 @@
               "returnArray": false
             },
             {
+              "key": "group",
+              "cssSelector": "td:nth-child(5)",
+              "returnValue": "text",
+              "returnArray": false
+            },
+            {
               "key": "owner",
               "cssSelector": "td:nth-child(6)",
+              "returnValue": "text",
+              "returnArray": false
+            },
+            {
+              "key": "created",
+              "cssSelector": "td:nth-child(7)",
+              "returnValue": "text",
+              "returnArray": false
+            },
+            {
+              "key": "daysActual",
+              "cssSelector": "td:nth-child(8)",
+              "returnValue": "text",
+              "returnArray": false
+            },
+            {
+              "key": "slaDays",
+              "cssSelector": "td:nth-child(9)",
+              "returnValue": "text",
+              "returnArray": false
+            },
+            {
+              "key": "daysOver",
+              "cssSelector": "td:nth-child(10)",
               "returnValue": "text",
               "returnArray": false
             }
@@ -333,7 +363,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Build the 5 table columns. Ticket cell is a HYPERLINK formula so it stays clickable.\n// Output keys must match the table headers exactly.\nreturn $input.all().map((item) => {\n  const j = item.json;\n  const url = String(j.url ?? '').replace(/\"/g, '\"\"'); // escape quotes for the formula\n  const ticket = String(j.ticket ?? '').trim();\n  return {\n    json: {\n      'Overdue Tickets': `=HYPERLINK(\"${url}\",\"${ticket}\")`,\n      'Severity': String(j.severity ?? '').trim(),\n      'Assignment': String(j.owner ?? '').trim(),\n      'State': String(j.state ?? '').trim(),\n      'Summary': '',\n    },\n  };\n});"
+        "jsCode": "// Build the table columns; ticket cell is a HYPERLINK formula so it stays clickable.\n// De-duplicated by ticket number (the dashboard lists a ticket in more than one section).\nconst num = (v) => {\n  const n = Number(String(v ?? '').trim());\n  return Number.isFinite(n) ? n : String(v ?? '').trim();\n};\nconst seen = new Set();\nconst out = [];\nfor (const item of $input.all()) {\n  const j = item.json;\n  const ticket = String(j.ticket ?? '').trim();\n  if (!ticket || seen.has(ticket)) continue;\n  seen.add(ticket);\n  const url = String(j.url ?? '').replace(/\"/g, '\"\"');\n  out.push({\n    json: {\n      'Overdue Tickets': `=HYPERLINK(\"${url}\",\"${ticket}\")`,\n      'Severity': String(j.severity ?? '').trim(),\n      'State': String(j.state ?? '').trim(),\n      'Status': String(j.sla ?? '').trim(),\n      'Assignment Group': String(j.group ?? '').trim(),\n      'Assignment': String(j.owner ?? '').trim(),\n      'Created': String(j.created ?? '').trim(),\n      'Days Actual': num(j.daysActual),\n      'SLA Days': num(j.slaDays),\n      'Days Over': num(j.daysOver),\n      'Summary': '',\n    },\n  });\n}\nreturn out;"
       },
       "id": "b326222c-b73e-4274-8774-ab0cf67752e8",
       "name": "Build rows",
@@ -350,7 +380,7 @@
         "url": "={{ $('Config').first().json.graphBase }}/sites/{{ $('Config').first().json.dstSiteId }}/drive/items/{{ $('Config').first().json.dstItemId }}/workbook/tables('{{ $('Config').first().json.dstTable }}')/rows",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ { \"values\": [[ $json['Overdue Tickets'], $json['Severity'], $json['Assignment'], $json['State'], $json['Summary'] ]] } }}",
+        "jsonBody": "={{ { \"values\": [[ $json['Overdue Tickets'], $json['Severity'], $json['State'], $json['Status'], $json['Assignment Group'], $json['Assignment'], $json['Created'], $json['Days Actual'], $json['SLA Days'], $json['Days Over'], $json['Summary'] ]] } }}",
         "authentication": "genericCredentialType",
         "genericAuthType": "oAuth2Api",
         "options": {}
