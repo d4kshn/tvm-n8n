@@ -1,0 +1,400 @@
+{
+  "name": "TVM overdue tickets - upload HTML, download Excel (server-safe)",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "TVM overdue tickets",
+        "formDescription": "Upload the daily dashboard HTML. You'll get the filtered Excel back as a download.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Dashboard HTML",
+              "fieldType": "file",
+              "acceptFileTypes": ".html,.htm",
+              "requiredField": true
+            }
+          ]
+        },
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "8ecf6b89-6570-4a42-b0ce-8ee04d020375",
+      "name": "On form submission",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [
+        240,
+        300
+      ],
+      "webhookId": "f973f69d-86d8-445d-9f30-596bea86be04"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "e6b49a7b-e2cc-435d-843d-2f3a6f718b81",
+              "name": "ownerList",
+              "value": "={{ [\"Julio Calderon\",\"Pedro Faria\",\"Zubair Malik\",\"Deepak Padliya\",\"Sel Soyer\"] }}",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "746a5892-6b9b-4b65-801d-e116cbd2bd68",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        450,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Expose whichever binary property the form produced as `data`,\n// so the HTML parser has a predictable field to read.\nconst item = $('On form submission').first();\nconst bin = item.binary || {};\nconst key = Object.keys(bin)[0];\nif (!key) {\n  throw new Error('No uploaded file found on the form submission.');\n}\nreturn [{ json: {}, binary: { data: bin[key] } }];"
+      },
+      "id": "2f99dd0b-363c-430c-8ce6-06f182596478",
+      "name": "Normalize upload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "extractHtmlContent",
+        "sourceData": "binary",
+        "dataPropertyName": "data",
+        "extractionValues": {
+          "values": [
+            {
+              "key": "rowHtml",
+              "cssSelector": "table tr",
+              "returnValue": "html",
+              "returnArray": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b193aaa0-a9f8-4da5-b90a-e17ed3fe34e7",
+      "name": "Extract rows",
+      "type": "n8n-nodes-base.html",
+      "typeVersion": 1.2,
+      "position": [
+        870,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "rowHtml",
+        "options": {}
+      },
+      "id": "9edf62a7-05e9-47e2-8741-0b488362d83e",
+      "name": "Split rows",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        1080,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ddc343f2-c372-4e7c-9c59-23b04a43df94",
+              "name": "rowWrapped",
+              "value": "={{ '<table>' + $json.rowHtml + '</table>' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "945b9323-47e5-43fa-b447-73e82c1b0081",
+      "name": "Wrap row",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1290,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "extractHtmlContent",
+        "sourceData": "json",
+        "dataPropertyName": "rowWrapped",
+        "extractionValues": {
+          "values": [
+            {
+              "key": "ticket",
+              "cssSelector": "td:nth-child(1) a.tkt",
+              "returnValue": "text",
+              "returnArray": false
+            },
+            {
+              "key": "url",
+              "cssSelector": "td:nth-child(1) a.tkt",
+              "returnValue": "attribute",
+              "attribute": "href",
+              "returnArray": false
+            },
+            {
+              "key": "severity",
+              "cssSelector": "td:nth-child(2)",
+              "returnValue": "text",
+              "returnArray": false
+            },
+            {
+              "key": "state",
+              "cssSelector": "td:nth-child(3)",
+              "returnValue": "text",
+              "returnArray": false
+            },
+            {
+              "key": "sla",
+              "cssSelector": "td:nth-child(4)",
+              "returnValue": "text",
+              "returnArray": false
+            },
+            {
+              "key": "owner",
+              "cssSelector": "td:nth-child(6)",
+              "returnValue": "text",
+              "returnArray": false
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "af95bcf9-8095-48fd-8b3e-726c1b012f36",
+      "name": "Extract fields",
+      "type": "n8n-nodes-base.html",
+      "typeVersion": 1.2,
+      "position": [
+        1500,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "c274a24f-ff1e-4b84-84e5-d4edeaed1195",
+              "leftValue": "={{ ($json.sla || '').trim() === 'Overdue' && $('Config').first().json.ownerList.includes(($json.owner || '').trim()) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e28ceaad-c9a8-4bf5-bfbe-b17ab95987da",
+      "name": "Keep overdue for owners",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        1710,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Plain-text columns (Ticket + URL). A clickable =HYPERLINK needs the online/Graph version.\nreturn $input.all().map((item) => {\n  const j = item.json;\n  return {\n    json: {\n      'Overdue Tickets': String(j.ticket ?? '').trim(),\n      'Ticket URL': String(j.url ?? '').trim(),\n      'Severity': String(j.severity ?? '').trim(),\n      'Assignment': String(j.owner ?? '').trim(),\n      'State': String(j.state ?? '').trim(),\n      'Summary': '',\n    },\n  };\n});"
+      },
+      "id": "194bc8f2-f752-4bc9-939a-5749d0601c04",
+      "name": "Build rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1920,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "options": {
+          "fileName": "tvm-overdue.xlsx",
+          "sheetName": "TVM Tickets"
+        }
+      },
+      "id": "7c6c5bda-048c-4b50-90b4-0d50300dbc9a",
+      "name": "To XLSX",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        2130,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "binary",
+        "responseBinaryPropertyName": "data",
+        "options": {}
+      },
+      "id": "7b493c7d-1e3e-4f9e-8103-e4b05818fb35",
+      "name": "Respond with file",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2340,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Form-upload version (n8n on server, files on your PC)\n\nn8n runs on the server, so it can't read your laptop's files. This version takes the HTML\n**through your browser** and hands the Excel back as a download \u2014 no server file access and\nno `N8N_RESTRICT_FILE_ACCESS_TO` needed.\n\n**How to use**\n1. Open the \"On form submission\" node and copy its form URL.\n   - Test URL: works while the canvas is open and you click **Execute workflow**.\n   - Production URL: works once the workflow is **Active**.\n2. In your browser, open that URL, pick your dashboard `.html`, and submit.\n3. The filtered Excel (Overdue tickets for your owners) downloads automatically.\n\n**Config**\n- `ownerList` \u2014 your 5 owners (prefilled). Edit in the Config node.\n\n**Notes**\n- Columns: Overdue Tickets, Ticket URL, Severity, Assignment, State, Summary (plain text;\n  a clickable `=HYPERLINK` needs the online/Graph version).\n- \"Normalize upload\" auto-detects the uploaded file's binary property, so the parser just\n  works regardless of the form field name.\n- Prefer it to run on the server against a file instead? Put the HTML on a network share the\n  server can reach (e.g. an SMB mount), add that path to `N8N_RESTRICT_FILE_ACCESS_TO`, and\n  use the earlier file-based workflow. That needs whoever administers the n8n server.\n",
+        "height": 600,
+        "width": 500,
+        "color": 4
+      },
+      "id": "dcc7fe2e-f96b-472e-a1a3-469cd7e78282",
+      "name": "Setup",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        240,
+        560
+      ]
+    }
+  ],
+  "connections": {
+    "On form submission": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Normalize upload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize upload": {
+      "main": [
+        [
+          {
+            "node": "Extract rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract rows": {
+      "main": [
+        [
+          {
+            "node": "Split rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split rows": {
+      "main": [
+        [
+          {
+            "node": "Wrap row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wrap row": {
+      "main": [
+        [
+          {
+            "node": "Extract fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract fields": {
+      "main": [
+        [
+          {
+            "node": "Keep overdue for owners",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Keep overdue for owners": {
+      "main": [
+        [
+          {
+            "node": "Build rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build rows": {
+      "main": [
+        [
+          {
+            "node": "To XLSX",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "To XLSX": {
+      "main": [
+        [
+          {
+            "node": "Respond with file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {}
+}

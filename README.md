@@ -45,4 +45,4 @@ credential and no per-node resource pickers.
 - Run manually once (schedule off) to validate before enabling the timer.
 
 ## Related
-- [`local-no-sharepoint/`](local-no-sharepoint/) — offline version that reads/writes local files (no SharePoint or Microsoft credentials), handy for testing the parse/filter logic before access is provisioned.
+- [`local-no-sharepoint/`](local-no-sharepoint/) — interim variants for testing without SharePoint or Microsoft credentials: a local file version, and a browser upload/download version for when n8n runs on a server.
