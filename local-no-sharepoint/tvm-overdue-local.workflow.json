@@ -25,7 +25,7 @@
             {
               "id": "33b5384b-61e4-4ada-94d5-a14361060782",
               "name": "outputXlsxPath",
-              "value": "/home/node/.n8n-files/tvm-overdue.xlsx",
+              "value": "=/home/node/.n8n-files/tvm-overdue-{{ $now.toFormat('yyyy-MM-dd') }}.xlsx",
               "type": "string"
             },
             {
