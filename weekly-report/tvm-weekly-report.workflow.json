@@ -1,0 +1,292 @@
+{
+  "name": "TVM weekly change report (upload the week, first-vs-last-day diff)",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "TVM weekly change report",
+        "formDescription": "Upload all of this week's tvm-overdue Excel files to get a per-owner change report.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Weekly Excel files",
+              "fieldType": "file",
+              "acceptFileTypes": ".xlsx",
+              "requiredField": true,
+              "multipleFiles": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "76e94609-2a3e-4515-a4d6-c6bb4b88862d",
+      "name": "On form submission",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [
+        240,
+        300
+      ],
+      "webhookId": "138e358b-062e-45bd-95c1-f2d0049d5f38"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Read all uploaded files, order by the date in the filename.\n// Oldest = first day of the week (prev), newest = last day (curr).\nconst item = $('On form submission').first();\nconst bin = item.binary || {};\nconst files = Object.keys(bin).map((k) => {\n  const b = bin[k];\n  const name = String(b.fileName || k);\n  const m = name.match(/(\\d{4})-(\\d{2})-(\\d{2})/);\n  return { binary: b, name, date: m ? `${m[1]}-${m[2]}-${m[3]}` : '' };\n});\nif (files.length < 2) {\n  throw new Error('Upload at least two days of files from the week.');\n}\nfiles.sort((a, b) => (a.date || '').localeCompare(b.date || '')); // oldest first\nconst prev = files[0];                 // first day of the week\nconst curr = files[files.length - 1];  // last day of the week\nreturn [{\n  json: { currName: curr.name, prevName: prev.name, currDate: curr.date, prevDate: prev.date, days: files.length },\n  binary: { curr: curr.binary, prev: prev.binary },\n}];"
+      },
+      "id": "7b5c9f26-07ac-4469-bbbd-56d0884410b7",
+      "name": "Order uploads",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "binaryPropertyName": "curr",
+        "options": {}
+      },
+      "id": "9842c4bf-261e-49ff-ba91-eb2bcdbc4cfd",
+      "name": "Parse last day",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        640,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map((i) => ({ json: { ...i.json, period: 'curr' } }));"
+      },
+      "id": "7b83892d-6cb8-488a-959d-1e1d1a07448a",
+      "name": "Tag last day",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        840,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "binaryPropertyName": "prev",
+        "options": {}
+      },
+      "id": "5b659772-e0ab-4b7f-b638-6dc0a07e7794",
+      "name": "Parse first day",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        640,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map((i) => ({ json: { ...i.json, period: 'prev' } }));"
+      },
+      "id": "1b83dcac-239c-471d-98f6-6cf7b2251ba3",
+      "name": "Tag first day",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        840,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "append"
+      },
+      "id": "fbf9074d-0310-4565-9f56-7b57b84e9817",
+      "name": "Combine rows",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        1040,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Compare first day vs last day of the week, grouped by owner.\nconst rows = $input.all().map((i) => i.json);\nconst groupByOwner = (arr) => {\n  const m = new Map();\n  for (const r of arr) {\n    const owner = String(r['Assignment'] ?? '').trim();\n    const ticket = String(r['Overdue Tickets'] ?? '').trim();\n    if (!owner || !ticket) continue;\n    if (!m.has(owner)) m.set(owner, new Set());\n    m.get(owner).add(ticket);\n  }\n  return m;\n};\nconst end = groupByOwner(rows.filter((r) => r.period === 'curr'));   // last day\nconst start = groupByOwner(rows.filter((r) => r.period === 'prev')); // first day\nconst owners = [...new Set([...end.keys(), ...start.keys()])].sort();\nconst out = [];\nfor (const owner of owners) {\n  const e = end.get(owner) || new Set();\n  const s = start.get(owner) || new Set();\n  const added = [...e].filter((t) => !s.has(t)).sort();\n  const cleared = [...s].filter((t) => !e.has(t)).sort();\n  out.push({ json: {\n    'Owner': owner,\n    'Start of Week': s.size,\n    'End of Week': e.size,\n    'Change': e.size - s.size,\n    'New Overdue': added.join(', '),\n    'Cleared': cleared.join(', '),\n  }});\n}\nreturn out;"
+      },
+      "id": "caa4b372-0967-4183-adc5-437fb2658fa2",
+      "name": "Diff",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "options": {
+          "fileName": "=tvm-weekly-report-{{ $('Order uploads').first().json.prevDate || 'start' }}-to-{{ $('Order uploads').first().json.currDate || $now.toFormat('yyyy-MM-dd') }}.xlsx",
+          "sheetName": "Weekly changes",
+          "headerRow": true
+        }
+      },
+      "id": "6b7212ae-842e-4fa9-a523-6a8845bcbcb5",
+      "name": "To report XLSX",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        1440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "completion",
+        "respondWith": "returnBinary",
+        "completionTitle": "Weekly report ready",
+        "completionMessage": "Your TVM weekly change report is downloading.",
+        "inputDataFieldName": "data",
+        "options": {}
+      },
+      "id": "47480757-545f-4ffd-a4c4-98a6e7d40bc8",
+      "name": "Download report",
+      "type": "n8n-nodes-base.form",
+      "typeVersion": 1,
+      "position": [
+        1640,
+        300
+      ],
+      "webhookId": "fe5b03ef-e2e2-4913-a09a-5a813ee25db6"
+    },
+    {
+      "parameters": {
+        "content": "## Weekly change report (upload the week's files)\n\nUpload all of a week's daily `tvm-overdue` Excel files; download a per-owner change report for\nthat week. No credentials needed.\n\n**How it works**\nReads every uploaded file, finds the earliest and latest by the date in the filename\n(first day vs last day of the week), diffs the ticket sets per owner, and reports the net\nchange plus the tickets that newly went overdue vs cleared during the week.\n\n**How to use**\n1. Open \"On form submission\", copy the form URL (run via the form, not \"Execute step\").\n2. Upload the week's files (two or more days \u2014 order doesn't matter).\n3. Download `tvm-weekly-report-<start>-to-<end>.xlsx`.\n\n**Report columns:** Owner, Start of Week, End of Week, Change, New Overdue, Cleared.\n\n**Notes**\n- Net change uses only the first and last day, so a ticket that appeared *and* cleared within\n  the week won't show. Ask if you'd rather count churn across every day.\n- Expects files from the tvm-overdue workflows (needs \"Overdue Tickets\" and \"Assignment\").\n- Response is a Form Ending (Return Binary File), like the other form workflow.\n",
+        "height": 600,
+        "width": 520,
+        "color": 4
+      },
+      "id": "30d67d6f-ef6e-4cd9-98e1-4920da223755",
+      "name": "Setup",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        240,
+        560
+      ]
+    }
+  ],
+  "connections": {
+    "On form submission": {
+      "main": [
+        [
+          {
+            "node": "Order uploads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Order uploads": {
+      "main": [
+        [
+          {
+            "node": "Parse last day",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Parse first day",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse last day": {
+      "main": [
+        [
+          {
+            "node": "Tag last day",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tag last day": {
+      "main": [
+        [
+          {
+            "node": "Combine rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse first day": {
+      "main": [
+        [
+          {
+            "node": "Tag first day",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tag first day": {
+      "main": [
+        [
+          {
+            "node": "Combine rows",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Combine rows": {
+      "main": [
+        [
+          {
+            "node": "Diff",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Diff": {
+      "main": [
+        [
+          {
+            "node": "To report XLSX",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "To report XLSX": {
+      "main": [
+        [
+          {
+            "node": "Download report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {}
+}

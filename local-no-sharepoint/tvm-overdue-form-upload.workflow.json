@@ -52,7 +52,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Expose whichever binary property the form produced as `data`,\n// so the HTML parser has a predictable field to read.\nconst item = $('On form submission').first();\nconst bin = item.binary || {};\nconst key = Object.keys(bin)[0];\nif (!key) {\n  throw new Error('No uploaded file found on the form submission.');\n}\nreturn [{ json: {}, binary: { data: bin[key] } }];"
+        "jsCode": "// Expose the uploaded file as `data`, and read the date from its filename.\nconst item = $('On form submission').first();\nconst bin = item.binary || {};\nconst key = Object.keys(bin)[0];\nif (!key) {\n  throw new Error('No uploaded file found on the form submission.');\n}\nconst name = String(bin[key].fileName || '');\nconst m = name.match(/(\\d{4}-\\d{2}-\\d{2})/);\nreturn [{ json: { sourceDate: m ? m[1] : '' }, binary: { data: bin[key] } }];"
       },
       "id": "ea818401-8ca8-42f9-ad21-d027797a44cf",
       "name": "Normalize upload",
@@ -263,7 +263,7 @@
       "parameters": {
         "operation": "xlsx",
         "options": {
-          "fileName": "=tvm-overdue-{{ $now.toFormat('yyyy-MM-dd') }}.xlsx",
+          "fileName": "={{ 'tvm-overdue-' + ($('Normalize upload').first().json.sourceDate || $now.toFormat('yyyy-MM-dd')) + '.xlsx' }}",
           "sheetName": "TVM Tickets",
           "headerRow": true
         }

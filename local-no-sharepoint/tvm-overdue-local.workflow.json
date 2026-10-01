@@ -24,8 +24,8 @@
             },
             {
               "id": "33b5384b-61e4-4ada-94d5-a14361060782",
-              "name": "outputXlsxPath",
-              "value": "=/home/node/.n8n-files/tvm-overdue-{{ $now.toFormat('yyyy-MM-dd') }}.xlsx",
+              "name": "outputDir",
+              "value": "/home/node/.n8n-files",
               "type": "string"
             },
             {
@@ -278,7 +278,7 @@
     {
       "parameters": {
         "operation": "write",
-        "fileName": "={{ $('Config').first().json.outputXlsxPath }}",
+        "fileName": "={{ $('Config').first().json.outputDir + '/tvm-overdue-' + (($('Config').first().json.inputHtmlPath.match(/(\\d{4}-\\d{2}-\\d{2})/) || [])[1] || $now.toFormat('yyyy-MM-dd')) + '.xlsx' }}",
         "dataPropertyName": "data",
         "options": {}
       },
