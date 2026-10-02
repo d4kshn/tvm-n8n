@@ -1,10 +1,10 @@
 {
-  "name": "TVM weekly AI report (upload week, Azure OpenAI narrative, HTML download)",
+  "name": "TVM weekly AI report (first/last day, clickable links, 5-paragraph summary)",
   "nodes": [
     {
       "parameters": {
         "formTitle": "TVM weekly AI report",
-        "formDescription": "Upload all of this week's tvm-overdue Excel files to get an AI-written HTML report.",
+        "formDescription": "Upload all of this week's tvm-overdue Excel files for an AI-written HTML report.",
         "formFields": {
           "values": [
             {
@@ -18,7 +18,7 @@
         },
         "options": {}
       },
-      "id": "91b5ae0c-3d8c-4e84-918b-784c2c2d22ff",
+      "id": "fabd927d-2658-4399-b541-c3144620cb7d",
       "name": "On form submission",
       "type": "n8n-nodes-base.formTrigger",
       "typeVersion": 2.2,
@@ -26,46 +26,100 @@
         240,
         300
       ],
-      "webhookId": "e72f45ac-7845-422c-a0da-af751c69eec6"
+      "webhookId": "7485e7b8-8368-4e4a-8f6f-29565b005463"
     },
     {
       "parameters": {
-        "jsCode": "// Emit one item per uploaded file, carrying its date (from the filename) and its binary.\nconst item = $('On form submission').first();\nconst bin = item.binary || {};\nconst out = [];\nfor (const key of Object.keys(bin)) {\n  const b = bin[key];\n  const name = String(b.fileName || key);\n  const m = name.match(/(\\d{4})-(\\d{2})-(\\d{2})/);\n  out.push({\n    json: { date: m ? `${m[1]}-${m[2]}-${m[3]}` : '', fileName: name },\n    binary: { data: b },\n  });\n}\nif (out.length < 2) {\n  throw new Error('Upload at least two days of files from the week.');\n}\nreturn out;"
+        "jsCode": "// Order uploaded files by the date in the filename: oldest -> prev (first day), newest -> curr (last day).\nconst item = $('On form submission').first();\nconst bin = item.binary || {};\nconst files = Object.keys(bin).map((k) => {\n  const b = bin[k];\n  const name = String(b.fileName || k);\n  const m = name.match(/(\\d{4}-\\d{2}-\\d{2})/);\n  return { binary: b, name, date: m ? m[1] : '' };\n});\nif (files.length < 2) {\n  throw new Error('Upload at least two days of files from the week.');\n}\nfiles.sort((a, b) => (a.date || '').localeCompare(b.date || ''));\nconst prev = files[0];\nconst curr = files[files.length - 1];\nreturn [{ json: { prevDate: prev.date, currDate: curr.date }, binary: { curr: curr.binary, prev: prev.binary } }];"
       },
-      "id": "50bdfdc4-954a-44b2-b3c5-824c593a1918",
-      "name": "Split files",
+      "id": "d560fe91-8ea8-403a-8b9d-5a9a6ee9dc11",
+      "name": "Order uploads",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        450,
+        440,
         300
       ]
     },
     {
       "parameters": {
         "operation": "xlsx",
-        "binaryPropertyName": "data",
+        "binaryPropertyName": "curr",
         "options": {}
       },
-      "id": "91f0dae4-3246-4dc8-9b29-1e637577bba3",
-      "name": "Parse files",
+      "id": "8cc8f4cd-6a08-434b-8694-e32a681baca4",
+      "name": "Parse last day",
       "type": "n8n-nodes-base.extractFromFile",
       "typeVersion": 1,
       "position": [
-        660,
+        640,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map((i) => ({ json: { ...i.json, period: 'curr' } }));"
+      },
+      "id": "20ea384b-c822-4901-98d7-c87567b417c8",
+      "name": "Tag last day",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        840,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "binaryPropertyName": "prev",
+        "options": {}
+      },
+      "id": "c2ba734b-5cd4-4fbf-a696-0c2c9f9479d9",
+      "name": "Parse first day",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        640,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map((i) => ({ json: { ...i.json, period: 'prev' } }));"
+      },
+      "id": "917e30eb-fe1e-4bd9-a1b4-a2481078003f",
+      "name": "Tag first day",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        840,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "append"
+      },
+      "id": "999eb52b-eafd-4004-8c3c-3e8db97da9cd",
+      "name": "Combine rows",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        1040,
         300
       ]
     },
     {
       "parameters": {
-        "jsCode": "// Attach each row's date (via pairedItem -> Split files), then compute per-owner weekly stats.\nconst files = $('Split files').all();\nconst dateForIndex = (idx) => (files[idx] && files[idx].json && files[idx].json.date) || '';\n\nconst rows = $input.all().map((it) => {\n  const pi = it.pairedItem;\n  let idx = 0;\n  if (Array.isArray(pi)) idx = (pi[0] && pi[0].item) || 0;\n  else if (pi && typeof pi === 'object') idx = pi.item || 0;\n  else if (typeof pi === 'number') idx = pi;\n  return {\n    date: dateForIndex(idx),\n    owner: String(it.json['Assignment'] ?? '').trim(),\n    ticket: String(it.json['Overdue Tickets'] ?? '').trim(),\n  };\n}).filter((r) => r.owner && r.ticket && r.date);\n\nconst dates = [...new Set(rows.map((r) => r.date))].sort();\nconst first = dates[0];\nconst last = dates[dates.length - 1];\n\nconst byOwnerDate = new Map();\nfor (const r of rows) {\n  if (!byOwnerDate.has(r.owner)) byOwnerDate.set(r.owner, new Map());\n  const dm = byOwnerDate.get(r.owner);\n  if (!dm.has(r.date)) dm.set(r.date, new Set());\n  dm.get(r.date).add(r.ticket);\n}\n\nconst perOwner = [];\nfor (const owner of [...byOwnerDate.keys()].sort()) {\n  const dm = byOwnerDate.get(owner);\n  const startSet = dm.get(first) || new Set();\n  const endSet = dm.get(last) || new Set();\n  const union = new Set();\n  for (const s of dm.values()) for (const t of s) union.add(t);\n  const persistent = [...union].filter((t) => dates.every((d) => (dm.get(d) || new Set()).has(t))).sort();\n  const added = [...endSet].filter((t) => !startSet.has(t)).sort();\n  const cleared = [...startSet].filter((t) => !endSet.has(t)).sort();\n  const transient = [...union].filter((t) => !startSet.has(t) && !endSet.has(t)).sort();\n  perOwner.push({\n    owner, start: startSet.size, end: endSet.size, net: endSet.size - startSet.size,\n    added, cleared, persistent, transient,\n  });\n}\n\nconst totalStart = perOwner.reduce((a, o) => a + o.start, 0);\nconst totalEnd = perOwner.reduce((a, o) => a + o.end, 0);\nconst netTotal = totalEnd - totalStart;\n\nconst lines = perOwner.map((o) =>\n  `- ${o.owner}: start ${o.start}, end ${o.end}, net ${o.net >= 0 ? '+' : ''}${o.net}; ` +\n  `new [${o.added.join(', ') || 'none'}]; cleared [${o.cleared.join(', ') || 'none'}]; ` +\n  `overdue-all-week [${o.persistent.join(', ') || 'none'}]; came-and-went [${o.transient.join(', ') || 'none'}]`);\n\nconst prompt =\n`You are a security operations analyst. Using ONLY the data below, write a concise weekly report on Network Engineering overdue vulnerability tickets. Do not invent or alter any numbers or ticket IDs. 3-5 short paragraphs, professional tone. Cover: the overall trend across the week, which owners improved or worsened (cite their net change), notable tickets (newly overdue, cleared, or overdue all week), and one or two takeaways.\n\nWeek: ${first} to ${last} (${dates.length} daily snapshots).\nTeam totals: start ${totalStart} overdue, end ${totalEnd} overdue, net ${netTotal >= 0 ? '+' : ''}${netTotal}.\n\nPer owner:\n${lines.join('\\n')}`;\n\nreturn [{ json: { prompt, perOwner, first, last, days: dates.length, totalStart, totalEnd } }];"
+        "jsCode": "// Per-owner first-day vs last-day, with a ticket -> URL map for clickable links.\nconst KNOWN = ['Julio Calderon', 'Pedro Faria', 'Zubair Malik', 'Deepak Padliya', 'Sel Soyer'];\nconst rows = $input.all().map((i) => i.json);\nconst url = new Map();\nconst byOwner = new Map();\nfor (const o of KNOWN) byOwner.set(o, { curr: new Set(), prev: new Set() });\nfor (const r of rows) {\n  const owner = String(r['Assignment'] ?? '').trim();\n  const ticket = String(r['Overdue Tickets'] ?? '').trim();\n  const u = String(r['Ticket URL'] ?? '').trim();\n  if (!owner || !ticket) continue;\n  if (u && !url.has(ticket)) url.set(ticket, u);\n  if (!byOwner.has(owner)) byOwner.set(owner, { curr: new Set(), prev: new Set() });\n  if (r.period === 'curr') byOwner.get(owner).curr.add(ticket);\n  else if (r.period === 'prev') byOwner.get(owner).prev.add(ticket);\n}\nconst prevDate = $('Order uploads').first().json.prevDate || '';\nconst currDate = $('Order uploads').first().json.currDate || '';\nconst extras = [...byOwner.keys()].filter((o) => !KNOWN.includes(o)).sort();\nconst owners = [...KNOWN, ...extras];\nconst perOwner = owners.map((owner) => {\n  const rec = byOwner.get(owner) || { curr: new Set(), prev: new Set() };\n  const current = [...rec.curr].sort();\n  const added = [...rec.curr].filter((t) => !rec.prev.has(t)).sort();\n  const cleared = [...rec.prev].filter((t) => !rec.curr.has(t)).sort();\n  return { owner, start: rec.prev.size, end: rec.curr.size, net: rec.curr.size - rec.prev.size, current, added, cleared };\n});\nconst urlMap = Object.fromEntries(url);\nconst totalStart = perOwner.reduce((a, o) => a + o.start, 0);\nconst totalEnd = perOwner.reduce((a, o) => a + o.end, 0);\nconst lines = perOwner.map((o) =>\n  `- ${o.owner}: ${o.start} -> ${o.end} (net ${o.net >= 0 ? '+' : ''}${o.net}); new [${o.added.join(', ') || 'none'}]; cleared [${o.cleared.join(', ') || 'none'}]`);\nconst prompt =\n`You are a security operations analyst. Using ONLY the data below, write a very concise weekly report on Network Engineering overdue vulnerability tickets. Do not invent or change any numbers or ticket IDs.\n\nWrite EXACTLY five short paragraphs, one for each owner, in this order: ${KNOWN.join(', ')}. Each paragraph is 2-3 sentences: name the owner, give their start-to-end count and net change, and call out their most notable new or cleared tickets (or say they were unchanged). No headings, no bullets, no preamble or conclusion - just the five paragraphs separated by blank lines.\n\nWeek ${prevDate} to ${currDate}. Team total ${totalStart} -> ${totalEnd} overdue.\n${lines.join('\\n')}`;\nreturn [{ json: { prompt, perOwner, urlMap, prevDate, currDate, totalStart, totalEnd } }];"
       },
-      "id": "5aa8ac06-346a-4d7c-ab24-36451e386ab4",
+      "id": "250831fe-62c7-4eb1-baa1-ff6dd9220421",
       "name": "Analyze week",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        870,
+        1240,
         300
       ]
     },
@@ -75,12 +129,12 @@
         "text": "={{ $json.prompt }}",
         "options": {}
       },
-      "id": "57aa32f7-954e-4906-823c-c30b70016ade",
+      "id": "ff6e9d00-2b29-4285-ae93-598331be8eae",
       "name": "Write report",
       "type": "@n8n/n8n-nodes-langchain.chainLlm",
       "typeVersion": 1.5,
       "position": [
-        1080,
+        1440,
         300
       ]
     },
@@ -88,25 +142,25 @@
       "parameters": {
         "options": {}
       },
-      "id": "cc0d9705-d816-41a5-9a08-fcce6c5b4a3d",
+      "id": "e9d68170-2a07-46a8-bda7-33b2d65f4c47",
       "name": "Azure OpenAI Chat Model",
       "type": "@n8n/n8n-nodes-langchain.lmChatAzureOpenAi",
       "typeVersion": 1.1,
       "position": [
-        1080,
+        1440,
         480
       ]
     },
     {
       "parameters": {
-        "jsCode": "// Combine the AI narrative with a per-owner table into a downloadable HTML report.\nconst a = $('Analyze week').first().json;\nlet narrative = '';\ntry {\n  const c = $('Write report').first().json;\n  narrative = String(c.text ?? c.output ?? c.response ?? '').trim();\n} catch (e) { narrative = ''; }\nif (!narrative) narrative = '(AI narrative unavailable \u2014 check the Azure OpenAI credential and deployment on the \"Azure OpenAI Chat Model\" node.)';\n\nconst esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst narrativeHtml = esc(narrative).split(/\\n\\n+/).map((p) => `<p>${p.replace(/\\n/g, '<br>')}</p>`).join('\\n');\n\nconst rowsHtml = (a.perOwner || []).map((o) => `\n  <tr>\n    <td>${esc(o.owner)}</td>\n    <td class=\"n\">${o.start}</td>\n    <td class=\"n\">${o.end}</td>\n    <td class=\"n ${o.net > 0 ? 'up' : (o.net < 0 ? 'down' : '')}\">${o.net >= 0 ? '+' : ''}${o.net}</td>\n    <td>${esc((o.added || []).join(', '))}</td>\n    <td>${esc((o.cleared || []).join(', '))}</td>\n    <td>${esc((o.persistent || []).join(', '))}</td>\n  </tr>`).join('');\n\nconst html = `<!doctype html><html><head><meta charset=\"utf-8\">\n<title>TVM weekly report ${esc(a.first)} to ${esc(a.last)}</title>\n<style>\nbody{font-family:Segoe UI,Arial,sans-serif;max-width:920px;margin:24px auto;padding:0 16px;color:#1b1b1b}\nh1{font-size:20px;margin-bottom:2px} h2{font-size:15px;margin-top:28px}\n.sub{color:#666;font-size:13px}\ntable{border-collapse:collapse;width:100%;font-size:13px;margin-top:8px}\nth,td{border:1px solid #ddd;padding:6px 8px;text-align:left;vertical-align:top}\nth{background:#f3f4f6} td.n{text-align:right} .up{color:#b00020} .down{color:#0a7d33}\np{line-height:1.5}\n</style></head><body>\n<h1>TVM Overdue Tickets \u2014 Weekly Report</h1>\n<div class=\"sub\">${esc(a.first)} to ${esc(a.last)} \u00b7 ${a.days} snapshots \u00b7 team ${a.totalStart} &rarr; ${a.totalEnd} overdue</div>\n<h2>Summary</h2>\n${narrativeHtml}\n<h2>By owner</h2>\n<table>\n<tr><th>Owner</th><th>Start</th><th>End</th><th>Net</th><th>New overdue</th><th>Cleared</th><th>Overdue all week</th></tr>\n${rowsHtml}\n</table>\n</body></html>`;\n\nconst fileName = `tvm-weekly-report-${a.first}-to-${a.last}.html`;\nreturn [{\n  json: { fileName },\n  binary: { data: { data: Buffer.from(html, 'utf8').toString('base64'), mimeType: 'text/html', fileName, fileExtension: 'html' } },\n}];"
+        "jsCode": "// Narrative + per-owner table with comma-separated clickable ticket links.\nconst a = $('Analyze week').first().json;\nconst urlMap = a.urlMap || {};\nlet narrative = '';\ntry {\n  const c = $('Write report').first().json;\n  narrative = String(c.text ?? c.output ?? c.response ?? '').trim();\n} catch (e) { narrative = ''; }\nif (!narrative) narrative = '(AI narrative unavailable - check the Azure OpenAI credential and deployment on the \"Azure OpenAI Chat Model\" node.)';\n\nconst esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst escAttr = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/\"/g, '&quot;').replace(/</g, '&lt;');\nconst link = (t) => { const u = urlMap[t]; return u ? `<a href=\"${escAttr(u)}\">${esc(t)}</a>` : esc(t); };\nconst linkList = (arr) => ((arr || []).map(link).join(', ')) || '<span class=\"muted\">none</span>';\n\nconst narrativeHtml = esc(narrative).split(/\\n\\n+/).map((p) => `<p>${p.replace(/\\n/g, '<br>')}</p>`).join('\\n');\n\nconst rowsHtml = (a.perOwner || []).map((o) => `\n  <tr>\n    <td>${esc(o.owner)}</td>\n    <td class=\"n\">${o.start}</td>\n    <td class=\"n\">${o.end}</td>\n    <td class=\"n ${o.net > 0 ? 'up' : (o.net < 0 ? 'down' : '')}\">${o.net >= 0 ? '+' : ''}${o.net}</td>\n    <td>${linkList(o.current)}</td>\n    <td>${linkList(o.added)}</td>\n    <td>${linkList(o.cleared)}</td>\n  </tr>`).join('');\n\nconst html = `<!doctype html><html><head><meta charset=\"utf-8\">\n<title>TVM weekly report ${esc(a.prevDate)} to ${esc(a.currDate)}</title>\n<style>\nbody{font-family:Segoe UI,Arial,sans-serif;max-width:1000px;margin:24px auto;padding:0 16px;color:#1b1b1b}\nh1{font-size:20px;margin-bottom:2px} h2{font-size:15px;margin-top:28px}\n.sub{color:#666;font-size:13px}\ntable{border-collapse:collapse;width:100%;font-size:13px;margin-top:8px}\nth,td{border:1px solid #ddd;padding:6px 8px;text-align:left;vertical-align:top}\nth{background:#f3f4f6} td.n{text-align:right;white-space:nowrap} .up{color:#b00020} .down{color:#0a7d33}\na{color:#0b5cad;text-decoration:none} a:hover{text-decoration:underline} .muted{color:#999} p{line-height:1.5}\n</style></head><body>\n<h1>TVM Overdue Tickets - Weekly Report</h1>\n<div class=\"sub\">${esc(a.prevDate)} to ${esc(a.currDate)} &middot; team ${a.totalStart} &rarr; ${a.totalEnd} overdue</div>\n<h2>Summary</h2>\n${narrativeHtml}\n<h2>By owner</h2>\n<table>\n<tr><th>Owner</th><th>Start</th><th>End</th><th>Net</th><th>Currently overdue</th><th>New this week</th><th>Cleared this week</th></tr>\n${rowsHtml}\n</table>\n</body></html>`;\n\nconst fileName = `tvm-weekly-report-${a.prevDate}-to-${a.currDate}.html`;\nreturn [{ json: { fileName }, binary: { data: { data: Buffer.from(html, 'utf8').toString('base64'), mimeType: 'text/html', fileName, fileExtension: 'html' } } }];"
       },
-      "id": "4bbaff88-acfb-4699-91cb-660888a7be8e",
+      "id": "9c3f612a-3bbf-42b1-8cdb-9c4725d7ba51",
       "name": "Build HTML report",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1290,
+        1640,
         300
       ]
     },
@@ -119,24 +173,24 @@
         "inputDataFieldName": "data",
         "options": {}
       },
-      "id": "dfca35b6-b9c7-4de5-95c3-96bd5b0f9fe9",
+      "id": "122764e5-c807-4e30-bfbc-12c2d9926674",
       "name": "Download report",
       "type": "n8n-nodes-base.form",
       "typeVersion": 1,
       "position": [
-        1500,
+        1840,
         300
       ],
-      "webhookId": "a369bd76-60f6-4baa-b540-c733babd001c"
+      "webhookId": "f26b5cfa-acc5-4fe3-bcc0-eb49fcede93d"
     },
     {
       "parameters": {
-        "content": "## Weekly AI report (upload the week's files -> HTML)\n\nUpload all of a week's daily `tvm-overdue` Excel files; download an HTML report with an\nAI-written summary plus a per-owner table.\n\n**Flow:** n8n parses every file and computes all the numbers (start/end counts, net change,\nnew / cleared / overdue-all-week tickets). Azure OpenAI only writes the prose from those\nnumbers, so figures never drift.\n\n**Setup (one-time)**\n- On the **Azure OpenAI Chat Model** node: pick your Azure AI Foundry credential, enter the\n  Project, and select your chat deployment (e.g. gpt-4o). Needs an Azure OpenAI deployment.\n- The two AI nodes are LangChain nodes; if either shows as unrecognized on import, delete and\n  re-add it from the node panel (search \"Azure OpenAI Chat Model\" and \"Basic LLM Chain\") and\n  reconnect.\n\n**Use**\n1. Open \"On form submission\", copy the form URL (run via the form, not Execute step).\n2. Upload the week's files; download `tvm-weekly-report-<start>-to-<end>.html`.\n\n**Notes**\n- Needs files from the tvm-overdue workflows (columns \"Overdue Tickets\" and \"Assignment\")\n  with the date in each filename.\n- If the report shows only one day, the multi-file parse didn't tag dates \u2014 open \"Parse files\"\n  output and confirm multiple files came through.\n",
-        "height": 620,
-        "width": 540,
+        "content": "## Weekly AI report (upload the week's files -> HTML)\n\nUpload a week of dated `tvm-overdue` Excel files; download an HTML report: an AI-written\nfive-paragraph summary (one per owner) plus a per-owner table with clickable ticket links.\n\n**Flow:** uses the earliest and latest file (first vs last day). n8n computes all numbers;\nAzure OpenAI only writes the prose, so figures never drift.\n\n**Setup:** on the \"Azure OpenAI Chat Model\" node, pick your Azure AI Foundry credential,\nProject, and chat deployment (e.g. gpt-4o). Run via the form URL (not Execute step).\n\n**Table columns:** Owner, Start, End, Net, Currently overdue, New this week, Cleared this week\n(ticket cells are comma-separated clickable links from the Ticket URL column).\n",
+        "height": 520,
+        "width": 560,
         "color": 4
       },
-      "id": "50ca2b5b-cda2-4a0d-8d1f-aa4d1438c056",
+      "id": "56c4eab2-9a9f-43bb-bfce-26af1a28ccb7",
       "name": "Setup",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -151,25 +205,74 @@
       "main": [
         [
           {
-            "node": "Split files",
+            "node": "Order uploads",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Split files": {
+    "Order uploads": {
       "main": [
         [
           {
-            "node": "Parse files",
+            "node": "Parse last day",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Parse first day",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Parse files": {
+    "Parse last day": {
+      "main": [
+        [
+          {
+            "node": "Tag last day",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tag last day": {
+      "main": [
+        [
+          {
+            "node": "Combine rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse first day": {
+      "main": [
+        [
+          {
+            "node": "Tag first day",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tag first day": {
+      "main": [
+        [
+          {
+            "node": "Combine rows",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Combine rows": {
       "main": [
         [
           {

@@ -15,7 +15,7 @@ HTML gets in and the Excel comes out.
 
 ## Common setup
 - In the **Config** node, set the `ownerList` (prefilled with the current owners).
-- Columns: Overdue Tickets, Ticket URL, Severity, State, Status, Assignment Group, Assignment, Created, Days Actual, SLA Days, Days Over, Summary (with a header row). Ticket + URL
+- Columns: Overdue Tickets, Ticket URL, Severity, State, Status, Assignment Group, Assignment, Created, Days Actual, SLA Days, Days Over, Summary (with a header row; the form-upload version also prepends an UploadDate column). Ticket + URL
   are plain text here — a clickable `=HYPERLINK` needs the production SharePoint/Graph
   version in the repo root.
 
